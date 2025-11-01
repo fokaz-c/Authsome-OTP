@@ -1,0 +1,18 @@
+- Fix GenerateOTP params use flat params instead of struct.
+- return OTP DTO instead of the ID.
+ DTO defined as
+ {
+  "id": "otp-otp-c6400630-d8bd-46ba-8d57-e37b76cf22f7",
+  "createdAt": "2025-11-01T22:21:40.628293348+05:30",
+  "updatedAt": "2025-11-01T22:21:40.628293348+05:30",
+  "expiresAt": 1762016200,
+  "code": "837835",
+  "context": "user_abc_123",
+  "metadata": {
+    "tenant_username": "test_user_signup",
+    "identity_type": "EMAIL",
+    "identity_source": "user@example.com",
+    "identity_password": "password"
+  }
+}
+- Combine Save and Generate at controller

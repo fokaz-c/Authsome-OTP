@@ -27,6 +27,7 @@ type Options struct {
 	MinAlphabetCount int
 	MaxNumCount      int
 	MaxAlphabetCount int
+	ExpiresInSeconds int64
 }
 
 const (
@@ -42,12 +43,17 @@ func NewOTPService(repo otp_repository.OTPRepository) *OTPService {
 	return &OTPService{repo: repo}
 }
 
-func (s *OTPService) SaveToDB(ctx context.Context, otp string, parentType, parentID string, metadata Metadata) (uint, error) {
+func (s *OTPService) SaveToDB(ctx context.Context, otp string, parentType, parentID string, metadata Metadata, expiresInSeconds int64) (uint, error) {
+	if expiresInSeconds <= 0 {
+		expiresInSeconds = 300
+	}
+
 	otpModel := &otp_model.OTPModel{
 		OTP:          otp,
 		ParentID:     parentID,
 		ParentSource: parentType,
 		Metadata:     metadata,
+		ExpiresAt:    time.Now().Unix() + expiresInSeconds,
 	}
 
 	if err := s.repo.Create(ctx, otpModel); err != nil {
@@ -62,13 +68,19 @@ func (s *OTPService) GetByID(ctx context.Context, id uint) (*otp_model.OTPModel,
 	if err != nil {
 		return nil, err
 	}
+
+	if time.Now().Unix() > otpModel.ExpiresAt {
+		s.repo.Delete(ctx, id)
+		return nil, fmt.Errorf("OTP expired")
+	}
+
 	return otpModel, nil
 }
 
 func (s *OTPService) ValidateOTP(ctx context.Context, token uint, otp, expectedParentType, expectedParentID string) (*otp_model.OTPModel, error) {
 	fetchedOTP, err := s.GetByID(ctx, token)
 	if err != nil {
-		return nil, fmt.Errorf("OTP not found")
+		return nil, fmt.Errorf("OTP not found or expired")
 	}
 
 	if fetchedOTP.OTP != otp {
@@ -82,9 +94,9 @@ func (s *OTPService) ValidateOTP(ctx context.Context, token uint, otp, expectedP
 	return fetchedOTP, nil
 }
 
-func (s *OTPService) DeleteExpiredOTPs(ctx context.Context, expiryDuration time.Duration) error {
-	expiryTime := time.Now().Add(-expiryDuration)
-	return s.repo.DeleteExpired(ctx, expiryTime)
+func (s *OTPService) DeleteExpiredOTPs(ctx context.Context) error {
+	currentTime := time.Now().Unix()
+	return s.repo.DeleteExpiredByTimestamp(ctx, currentTime)
 }
 
 func GenerateOTP(op Options) (string, error) {
